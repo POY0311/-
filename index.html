@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Tetris</title>
+<style>
+body {
+  margin: 0;
+  background: #111;
+  color: white;
+  font-family: sans-serif;
+}
+.screen {
+  display: none;
+  height: 100vh;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+.active { display: flex; }
+canvas {
+  background: black;
+  border: 2px solid #555;
+}
+button {
+  padding: 12px 24px;
+  font-size: 18px;
+  margin: 10px;
+  cursor: pointer;
+}
+.settings {
+  align-items: flex-start;
+  padding: 20px;
+}
+.back-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+}
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: none;
+  justify-content: center;
+  align-items: center;
+}
+.overlay.active { display: flex; }
+.modal {
+  background: #222;
+  padding: 30px;
+  border-radius: 10px;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<!-- 메인 -->
+<div id="menu" class="screen active">
+  <h1>테트리스</h1>
+  <button onclick="startGame()">시작하기</button>
+  <button onclick="openSettings()">설정</button>
+</div>
+
+<!-- 게임 -->
+<div id="game" class="screen">
+  <canvas id="tetris" width="240" height="400"></canvas>
+
+  <!-- 게임 오버 -->
+  <div id="gameOver" class="overlay">
+    <div class="modal">
+      <h2>Game Over</h2>
+      <button onclick="restart()">다시 하기</button>
+      <button onclick="backToMenu()">메인 화면</button>
+    </div>
+  </div>
+</div>
+
+<!-- 설정 -->
+<div id="settings" class="screen settings">
+  <button class="back-btn" onclick="backToMenu()">← 뒤로</button>
+  <h2>키 설정</h2>
+  <div>왼쪽 <button onclick="setKey('left')" id="leftKey"></button></div>
+  <div>오른쪽 <button onclick="setKey('right')" id="rightKey"></button></div>
+  <div>아래 <button onclick="setKey('down')" id="downKey"></button></div>
+  <div>회전 <button onclick="setKey('rotate')" id="rotateKey"></button></div>
+  <div>하드드롭 <button onclick="setKey('drop')" id="dropKey"></button></div>
+</div>
+
+<script>
+/* ===== 화면 ===== */
+const menu = document.getElementById('menu');
+const gameScreen = document.getElementById('game');
+const settingsScreen = document.getElementById('settings');
+const gameOverUI = document.getElementById('gameOver');
+
+const show = s => {
+  [menu, gameScreen, settingsScreen].forEach(v => v.classList.remove('active'));
+  s.classList.add('active');
+};
+
+const startGame = () => { resetGame(); show(gameScreen); };
+const openSettings = () => { updateKeyUI(); show(settingsScreen); };
+const backToMenu = () => { gameOverUI.classList.remove('active'); show(menu); };
+const restart = () => { gameOverUI.classList.remove('active'); resetGame(); };
+
+/* ===== 키 설정 ===== */
+const keys = { left:'ArrowLeft', right:'ArrowRight', down:'ArrowDown', rotate:'ArrowUp', drop:'Space' };
+let waitKey = null;
+
+const setKey = k => { waitKey = k; alert('키를 누르세요'); };
+
+document.addEventListener('keydown', e => {
+  if (waitKey) {
+    keys[waitKey] = e.code;
+    waitKey = null;
+    updateKeyUI();
+    return;
+  }
+  handleInput(e);
+});
+
+const updateKeyUI = () => {
+  leftKey.textContent = keys.left;
+  rightKey.textContent = keys.right;
+  downKey.textContent = keys.down;
+  rotateKey.textContent = keys.rotate;
+  dropKey.textContent = keys.drop;
+};
+
+/* ===== 테트리스 ===== */
+const canvas = document.getElementById('tetris');
+const ctx = canvas.getContext('2d');
+ctx.scale(20,20);
+
+const ROWS=20, COLS=12;
+let arena, player, gameOver=false;
+let dropInterval=700, dropCounter=0, lastTime=0;
+
+/* 파스텔 색상 */
+const colors = [
+  null,
+  '#FFB3C6', // I
+  '#BDE0FE', // O
+  '#CDB4DB', // T
+  '#A0E7E5', // L
+  '#B9FBC0', // J
+  '#FFD6A5', // S
+  '#FFC8DD', // Z
+  '#FFFFFF'  // flash
+];
+
+function resetGame(){
+  arena = Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  player = { pos:{x:5,y:0}, matrix:null };
+  gameOver = false;
+  spawn();
+}
+
+function spawn(){
+  const p='ILJOTSZ';
+  player.matrix = createPiece(p[Math.random()*7|0]);
+  player.pos = {x:5,y:0};
+  if (collide()) endGame();
+}
+
+function endGame(){
+  gameOver = true;
+  gameOverUI.classList.add('active');
+}
+
+function createPiece(t){
+  if(t==='I')return[[1],[1],[1],[1]];
+  if(t==='O')return[[2,2],[2,2]];
+  if(t==='T')return[[0,3,0],[3,3,3]];
+  if(t==='L')return[[0,4],[0,4],[4,4]];
+  if(t==='J')return[[5,0],[5,0],[5,5]];
+  if(t==='S')return[[0,6,6],[6,6,0]];
+  if(t==='Z')return[[7,7,0],[0,7,7]];
+}
+
+function collide(){
+  return player.matrix.some((r,y)=>
+    r.some((v,x)=>v && arena[y+player.pos.y]?.[x+player.pos.x]!==0)
+  );
+}
+
+function merge(){
+  player.matrix.forEach((r,y)=>r.forEach((v,x)=>{
+    if(v) arena[y+player.pos.y][x+player.pos.x]=v;
+  }));
+}
+
+function clearLines(){
+  let rows=[];
+  arena.forEach((r,y)=>{ if(r.every(v=>v)) rows.push(y); });
+  if(!rows.length) return;
+
+  rows.sort((a,b)=>b-a); // ⭐ 버그 수정 핵심
+
+  let flash=0;
+  const anim=setInterval(()=>{
+    rows.forEach(y=>arena[y].fill(flash%2?8:0));
+    flash++;
+    if(flash===4){
+      clearInterval(anim);
+      rows.forEach(y=>arena.splice(y,1));
+      while(arena.length<ROWS) arena.unshift(Array(COLS).fill(0));
+    }
+  },100);
+}
+
+function rotate(){
+  const m = player.matrix;
+  player.matrix = m[0].map((_,i)=>m.map(r=>r[i]).reverse());
+  if (collide()) player.matrix = m;
+}
+
+function drop(){
+  player.pos.y++;
+  if (collide()){
+    player.pos.y--;
+    merge();
+    clearLines();
+    spawn();
+  }
+}
+
+function handleInput(e){
+  if(!gameScreen.classList.contains('active') || gameOver) return;
+  if(e.code===keys.left){ player.pos.x--; if(collide()) player.pos.x++; }
+  if(e.code===keys.right){ player.pos.x++; if(collide()) player.pos.x--; }
+  if(e.code===keys.down) drop();
+  if(e.code===keys.rotate) rotate();
+  if(e.code===keys.drop){
+    while(!collide()) player.pos.y++;
+    player.pos.y--; drop();
+  }
+}
+
+function draw(){
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  arena.forEach((r,y)=>r.forEach((v,x)=>{
+    if(v){ ctx.fillStyle=colors[v]; ctx.fillRect(x,y,1,1); }
+  }));
+  if(player.matrix)
+    player.matrix.forEach((r,y)=>r.forEach((v,x)=>{
+      if(v){ ctx.fillStyle=colors[v]; ctx.fillRect(x+player.pos.x,y+player.pos.y,1,1); }
+    }));
+}
+
+function update(t=0){
+  const delta=t-lastTime;
+  lastTime=t;
+  if(!gameOver){
+    dropCounter+=delta;
+    if(dropCounter>dropInterval){ drop(); dropCounter=0; }
+    draw();
+  }
+  requestAnimationFrame(update);
+}
+
+resetGame();
+update();
+</script>
+</body>
+</html>
