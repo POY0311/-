@@ -10,10 +10,9 @@ HTML, CSS, JavaScript만으로 구현한
 
 ## 🕹️ 플레이 방법
 
-### ▶ 실행 방법
-1. 이 저장소를 클론하거나 다운로드합니다.
-2. `tetris.html` 파일을 브라우저에서 실행합니다.
-3. 별도의 라이브러리나 서버 설정은 필요 없습니다.
+## ▶ 실행 방법
+1. `tetris.html` 파일을 다운로드합니다.
+2. 브라우저에서 파일을 열면 바로 실행됩니다.
 
 ```bash
 git clone https://github.com/POY0311/tetris.git
